@@ -2,7 +2,7 @@
 /*
 Plugin Name: Event Custom Post Type
 Description: Кастомный CPT «События» с метабоксами, картами и AJAX-подгрузкой.
-Version: 1.1
+Version: 1.2
 Author: Denis
 */
 
@@ -13,6 +13,7 @@ require_once __DIR__ . '/inc/cpt.php'; // регистрация CPT
 require_once __DIR__ . '/inc/metaboxes.php'; // метабоксы
 require_once __DIR__ . '/inc/card-template.php'; // шаблон карточки события
 require_once __DIR__ . '/inc/shortcode.php'; // шорткод и AJAX
+require_once __DIR__ . '/inc/settings-page.php'; // страница настроек
 
 // стиль и скрипты
 add_action('wp_enqueue_scripts', function() {

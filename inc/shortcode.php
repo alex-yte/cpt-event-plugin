@@ -2,13 +2,11 @@
 
 if (!defined('ABSPATH')) exit;
 
-// вывод списка
 add_shortcode('events_list', function() {
 
     $nonce = wp_create_nonce('load_more_events_nonce');
     $today = current_time('Y-m-d');
 
-    // один запрос для первой страницы
     $per_page = 3;
     $page = 1;
 
@@ -30,8 +28,25 @@ add_shortcode('events_list', function() {
 
     $q = new WP_Query($args);
 
+    $options = get_option('event_cpt_settings');
+    $card_bg = isset($options['card_bg']) ? $options['card_bg'] : '#fafafa';
+    $border_width = isset($options['border_width']) ? $options['border_width'] : 1;
+    $border_style = isset($options['border_style']) ? $options['border_style'] : 'solid';
+    $border_color = isset($options['border_color']) ? $options['border_color'] : '#e3e3e3';
+    $cards_per_row = isset($options['cards_per_row']) ? $options['cards_per_row'] : 1;
+
     ob_start();
     ?>
+
+    <style id = 'event-vars'>
+        :root {
+            --event-card-bg: <?php echo esc_attr($card_bg); ?>;
+            --event-card-border-width: <?php echo esc_attr($border_width); ?>px;
+            --event-card-border-style: <?php echo esc_attr($border_style); ?>;
+            --event-card-border-color: <?php echo esc_attr($border_color); ?>;
+            --cards-per-row: <?php echo esc_attr($cards_per_row); ?>;
+        }
+    </style>
 
     <div id="events-list" data-nonce="<?php echo esc_attr($nonce); ?>">
         <?php
@@ -54,7 +69,6 @@ add_shortcode('events_list', function() {
     return ob_get_clean();
 });
 
-// получение HTML пачки событий для AJAX
 function ev_get_events_html($page = 1, $per_page = 3) {
     $today = current_time('Y-m-d');
 
@@ -86,7 +100,7 @@ function ev_get_events_html($page = 1, $per_page = 3) {
     return $html;
 }
 
-// AJAX
+
 add_action('wp_ajax_load_more_events', 'ev_ajax_load_more');
 add_action('wp_ajax_nopriv_load_more_events', 'ev_ajax_load_more');
 

@@ -26,16 +26,12 @@ document.addEventListener('click', function (e) {
                     initEventMaps();
                 }
 
-                // увеличиваем страницу
                 btn.dataset.page = page + 1;
-                console.log(page, perPage);
+
                 const maxPages = parseInt(btn.getAttribute('data-max-pages')) || 1;
                 if (page >= maxPages) {
-                    btn.remove(); // удаляем кнопку, если достигли максимума
+                    btn.remove();
                 }
-
-
-                // если на сервере вернули скрипт для удаления кнопки, он сработает автоматически
             }
         });
 });
