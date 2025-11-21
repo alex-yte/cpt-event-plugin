@@ -2,7 +2,52 @@
 
 if (!defined('ABSPATH')) exit;
 
-// Add settings page to admin menu
+// =============================================================================
+// НАСТРОЙКИ И ДЕФОЛТНЫЕ ЗНАЧЕНИЯ
+// =============================================================================
+
+// Дефолтные настройки внешнего вида карточек.
+define('EV_DEFAULT_CARD_BG', '#fafafa');
+define('EV_DEFAULT_BORDER_WIDTH', 1);
+define('EV_DEFAULT_BORDER_STYLE', 'solid');
+define('EV_DEFAULT_BORDER_COLOR', '#e3e3e3');
+define('EV_DEFAULT_CARDS_PER_ROW', 1);
+define('EV_DEFAULT_CRON_PERIOD', 'off');
+
+// Доступные стили рамки.
+$ev_border_styles = array(
+    'solid'  => 'Сплошная',
+    'dashed' => 'Пунктирная',
+    'dotted' => 'Точечная',
+    'double' => 'Двойная',
+    'none'   => 'Без рамки'
+);
+
+// Доступные периоды удаления cron задач.
+$ev_cron_periods = array(
+    'off'      => 'Выключено',
+    'week'     => 'Неделя (7 дней)',
+    'month'    => 'Месяц (30 дней)',
+    '6months'  => '6 месяцев (180 дней)',
+    'year'     => 'Год (365 дней)'
+);
+
+// =============================================================================
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+// =============================================================================
+
+/**
+ * Получение значения настройки с дефолтным fallback.
+ */
+function ev_get_setting($key, $default = '') {
+    $options = get_option('event_cpt_settings', array());
+    return isset($options[$key]) ? $options[$key] : $default;
+}
+
+// =============================================================================
+// МЕНЮ АДМИНИСТРАТОРА
+// =============================================================================
+
 add_action('admin_menu', 'ev_add_settings_page');
 
 function ev_add_settings_page() {
@@ -16,12 +61,16 @@ function ev_add_settings_page() {
     );
 }
 
-// Register settings
+// =============================================================================
+// РЕГИСТРАЦИЯ НАСТРОЕК
+// =============================================================================
+
 add_action('admin_init', 'ev_register_settings');
 
 function ev_register_settings() {
     register_setting('event_cpt_settings_group', 'event_cpt_settings', 'ev_sanitize_settings');
 
+    // Секция внешнего вида карточек.
     add_settings_section(
         'ev_appearance_section',
         'Настройки внешнего вида карточек',
@@ -29,114 +78,135 @@ function ev_register_settings() {
         'event-settings'
     );
 
-    add_settings_field(
-        'card_bg',
-        'Фон карточки',
-        'ev_card_bg_callback',
-        'event-settings',
-        'ev_appearance_section'
+    // Поля внешнего вида карточек.
+    $appearance_fields = array(
+        array('id' => 'card_bg', 'label' => 'Фон карточки', 'callback' => 'ev_card_bg_callback'),
+        array('id' => 'border_width', 'label' => 'Толщина рамки', 'callback' => 'ev_border_width_callback'),
+        array('id' => 'border_style', 'label' => 'Стиль рамки', 'callback' => 'ev_border_style_callback'),
+        array('id' => 'border_color', 'label' => 'Цвет рамки', 'callback' => 'ev_border_color_callback'),
+        array('id' => 'cards_per_row', 'label' => 'Карточек в ряд', 'callback' => 'ev_cards_per_row_callback'),
     );
 
-    add_settings_field(
-        'border_width',
-        'Толщина рамки',
-        'ev_border_width_callback',
-        'event-settings',
-        'ev_appearance_section'
+    foreach ($appearance_fields as $field) {
+        add_settings_field(
+            $field['id'],
+            $field['label'],
+            $field['callback'],
+            'event-settings',
+            'ev_appearance_section'
+        );
+    }
+
+    // Секция cron задач.
+    add_settings_section(
+        'ev_cron_section',
+        'Автоматическое удаление событий',
+        'ev_cron_section_callback',
+        'event-settings'
     );
 
-    add_settings_field(
-        'border_style',
-        'Стиль рамки',
-        'ev_border_style_callback',
+    // Поле выбора периода cron задачи (радио кнопки).
+    add_settings_section(
+        'cron_delete_period',
+        'Удалять события старше',
+        'ev_cron_delete_period_callback',
         'event-settings',
-        'ev_appearance_section'
-    );
-
-    add_settings_field(
-        'border_color',
-        'Цвет рамки',
-        'ev_border_color_callback',
-        'event-settings',
-        'ev_appearance_section'
-    );
-
-    add_settings_field(
-        'cards_per_row',
-        'Карточек в ряд',
-        'ev_cards_per_row_callback',
-        'event-settings',
-        'ev_appearance_section'
+        'ev_cron_section'
     );
 }
+
+// =============================================================================
+// ОЧИСТКА НАСТРОЕК
+// =============================================================================
 
 function ev_sanitize_settings($input) {
     $sanitized = array();
 
+    // Очистка цвета фона карточки.
     if (isset($input['card_bg'])) {
         $sanitized['card_bg'] = sanitize_hex_color($input['card_bg']);
     }
 
+    // Очистка толщины рамки.
     if (isset($input['border_width'])) {
         $sanitized['border_width'] = absint($input['border_width']);
     }
 
+    // Очистка стиля рамки.
     if (isset($input['border_style'])) {
         $allowed_styles = array('solid', 'dashed', 'dotted', 'double', 'none');
-        $sanitized['border_style'] = in_array($input['border_style'], $allowed_styles) ? $input['border_style'] : 'solid';
+        $sanitized['border_style'] = in_array($input['border_style'], $allowed_styles)
+            ? $input['border_style']
+            : EV_DEFAULT_BORDER_STYLE;
     }
 
+    // Очистка цвета рамки.
     if (isset($input['border_color'])) {
         $sanitized['border_color'] = sanitize_hex_color($input['border_color']);
     }
 
+    // Очистка количества карточек в ряду.
     if (isset($input['cards_per_row'])) {
         $sanitized['cards_per_row'] = absint($input['cards_per_row']);
         if ($sanitized['cards_per_row'] < 1 || $sanitized['cards_per_row'] > 4) {
-            $sanitized['cards_per_row'] = 1;
+            $sanitized['cards_per_row'] = EV_DEFAULT_CARDS_PER_ROW;
         }
     }
 
+    // Очистка периода cron задачи (радио кнопки).
+    $allowed_periods = array('off', 'week', 'month', '6months', 'year');
+    $sanitized['cron_delete_period'] = isset($input['cron_delete_period'])
+        && in_array($input['cron_delete_period'], $allowed_periods)
+        ? $input['cron_delete_period']
+        : EV_DEFAULT_CRON_PERIOD;
+
     return $sanitized;
 }
+
+// =============================================================================
+// ОБРАБОТЧИКИ СЕКЦИЙ
+// =============================================================================
 
 function ev_appearance_section_callback() {
     echo '<p>Настройте внешний вид карточек событий.</p>';
 }
 
+function ev_cron_section_callback() {
+    echo '<p>Выберите период, после которого события будут удаляться автоматически. Задача выполняется ежедневно.</p>';
+}
+
+// =============================================================================
+// ОБРАБОТЧИКИ ПОЛЕЙ - ВНЕШНИЙ ВИД
+// =============================================================================
+
 function ev_card_bg_callback() {
-    $options = get_option('event_cpt_settings');
-    $value = isset($options['card_bg']) ? $options['card_bg'] : '#fafafa';
+    $value = ev_get_setting('card_bg', EV_DEFAULT_CARD_BG);
     echo '<input type="color" name="event_cpt_settings[card_bg]" value="' . esc_attr($value) . '" />';
 }
 
 function ev_border_width_callback() {
-    $options = get_option('event_cpt_settings');
-    $value = isset($options['border_width']) ? $options['border_width'] : 1;
+    $value = ev_get_setting('border_width', EV_DEFAULT_BORDER_WIDTH);
     echo '<input type="number" name="event_cpt_settings[border_width]" value="' . esc_attr($value) . '" min="0" max="10" /> px';
 }
 
 function ev_border_style_callback() {
-    $options = get_option('event_cpt_settings');
-    $value = isset($options['border_style']) ? $options['border_style'] : 'solid';
-    $styles = array('solid' => 'Сплошная', 'dashed' => 'Пунктирная', 'dotted' => 'Точечная', 'double' => 'Двойная', 'none' => 'Без рамки');
+    global $ev_border_styles;
+    $value = ev_get_setting('border_style', EV_DEFAULT_BORDER_STYLE);
 
     echo '<select name="event_cpt_settings[border_style]">';
-    foreach ($styles as $key => $label) {
+    foreach ($ev_border_styles as $key => $label) {
         echo '<option value="' . esc_attr($key) . '" ' . selected($value, $key, false) . '>' . esc_html($label) . '</option>';
     }
     echo '</select>';
 }
 
 function ev_border_color_callback() {
-    $options = get_option('event_cpt_settings');
-    $value = isset($options['border_color']) ? $options['border_color'] : '#e3e3e3';
+    $value = ev_get_setting('border_color', EV_DEFAULT_BORDER_COLOR);
     echo '<input type="color" name="event_cpt_settings[border_color]" value="' . esc_attr($value) . '" />';
 }
 
 function ev_cards_per_row_callback() {
-    $options = get_option('event_cpt_settings');
-    $value = isset($options['cards_per_row']) ? $options['cards_per_row'] : 1;
+    $value = ev_get_setting('cards_per_row', EV_DEFAULT_CARDS_PER_ROW);
 
     echo '<select name="event_cpt_settings[cards_per_row]">';
     for ($i = 1; $i <= 4; $i++) {
@@ -145,37 +215,45 @@ function ev_cards_per_row_callback() {
     echo '</select>';
 }
 
-// Render settings page
+// =============================================================================
+// ОБРАБОТЧИКИ ПОЛЕЙ - CRON
+// =============================================================================
+
+function ev_cron_delete_period_callback() {
+    global $ev_cron_periods;
+    $value = ev_get_setting('cron_delete_period', EV_DEFAULT_CRON_PERIOD);
+
+    foreach ($ev_cron_periods as $key => $label) {
+        echo '<label style="display: block; margin-bottom: 8px;">';
+        echo '<input type="radio" name="event_cpt_settings[cron_delete_period]" value="' . esc_attr($key) . '" ' . checked($value, $key, false) . ' /> ';
+        echo esc_html($label);
+        echo '</label>';
+    }
+}
+
+// =============================================================================
+// РЕНДЕР СТРАНИЦЫ НАСТРОЕК
+// =============================================================================
+
 function ev_render_settings_page() {
     if (!current_user_can('manage_options')) {
         return;
     }
 
-    // Enqueue color picker
+    // Подключение цветового пикера.
     wp_enqueue_style('wp-color-picker');
     wp_enqueue_script('wp-color-picker');
 
-    // Get current settings
-    $options = get_option('event_cpt_settings');
-    $card_bg = isset($options['card_bg']) ? $options['card_bg'] : '#fafafa';
-    $border_width = isset($options['border_width']) ? $options['border_width'] : 1;
-    $border_style = isset($options['border_style']) ? $options['border_style'] : 'solid';
-    $border_color = isset($options['border_color']) ? $options['border_color'] : '#e3e3e3';
-    $cards_per_row = isset($options['cards_per_row']) ? $options['cards_per_row'] : 1;
+    // Получение текущих настроек.
+    $card_bg = ev_get_setting('card_bg', EV_DEFAULT_CARD_BG);
+    $border_width = ev_get_setting('border_width', EV_DEFAULT_BORDER_WIDTH);
+    $border_style = ev_get_setting('border_style', EV_DEFAULT_BORDER_STYLE);
+    $border_color = ev_get_setting('border_color', EV_DEFAULT_BORDER_COLOR);
+    $cards_per_row = ev_get_setting('cards_per_row', EV_DEFAULT_CARDS_PER_ROW);
 
     ?>
     <div class="wrap event-settings-page">
         <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-
-        <!-- <style id="event-preview-styles">
-            :root {
-                --event-card-bg: <?php echo esc_attr($card_bg); ?>;
-                --event-card-border-width: <?php echo esc_attr($border_width); ?>px;
-                --event-card-border-style: <?php echo esc_attr($border_style); ?>;
-                --event-card-border-color: <?php echo esc_attr($border_color); ?>;
-                --cards-per-row: <?php echo esc_attr($cards_per_row); ?>;
-            }
-        </style> -->
 
         <div class="event-settings-container">
             <div class="event-settings-preview">
@@ -237,25 +315,24 @@ function ev_render_settings_page() {
 
     <script>
     jQuery(document).ready(function($) {
-        // Initialize color pickers
+        // Инициализация цветового пикера.
         $('input[type="color"]').wpColorPicker({
             change: function(event, ui) {
                 updatePreview();
             }
         });
 
-        // Add listeners to all form inputs
-        $('input[name="event_cpt_settings[card_bg]"]').on('input', updatePreview);
+        // Добавление обработчиков к всем полям формы.
+        $('input[name="event_cpt_settings[card_bg]"]').on('change', updatePreview);
         $('input[name="event_cpt_settings[border_width]"]').on('input', updatePreview);
         $('select[name="event_cpt_settings[border_style]"]').on('input', updatePreview);
-        $('input[name="event_cpt_settings[border_color]"]').on('input', updatePreview);
+        $('input[name="event_cpt_settings[border_color]"]').on('change', updatePreview);
         $('select[name="event_cpt_settings[cards_per_row]"]').on('input', function() {
             updatePreview();
             reinitializeMaps();
         });
 
         function updatePreview() {
-            console.log('updatePreview called');
 
             var cardBg = $('input[name="event_cpt_settings[card_bg]"]').val();
             var borderWidth = $('input[name="event_cpt_settings[border_width]"]').val();
@@ -275,15 +352,15 @@ function ev_render_settings_page() {
         }
 
         function reinitializeMaps() {
-            // Re-initialize all Yandex maps
+            // Инициализация всех Яндекс карт.
             if (typeof ymaps !== 'undefined' && typeof initEventMaps === 'function') {
-                // Remove map initialization markers and clear map containers
+                // Удаление маркеров инициализации карт и очистка контейнеров карт.
                 $('.event-map').each(function() {
                     $(this).removeAttr('data-map-initialized');
-                    $(this).html(''); // Clear the map container
+                    $(this).html(''); // Очистка контейнера карты.
                 });
 
-                // Re-initialize maps
+                // Инициализация карт.
                 ymaps.ready(function() {
                     initEventMaps();
                 });
@@ -294,16 +371,19 @@ function ev_render_settings_page() {
     <?php
 }
 
-// Enqueue admin assets for settings page
+// =============================================================================
+// АССЕТЫ АДМИНИСТРАТОРА
+// =============================================================================
+
 add_action('admin_enqueue_scripts', 'ev_enqueue_settings_assets');
 
 function ev_enqueue_settings_assets($hook) {
-    // Only load on our settings page
+    // Только загружаем на нашей странице настроек.
     if ($hook !== 'event_page_event-settings') {
         return;
     }
 
-    // Enqueue frontend styles and scripts for preview
+    // Подключение стилей и скриптов для предпросмотра.
     wp_enqueue_style(
         'events-list-css',
         plugin_dir_url(dirname(__FILE__)) . 'assets/events-list.css'
@@ -317,7 +397,7 @@ function ev_enqueue_settings_assets($hook) {
         true
     );
 
-    // Яндекс.Карты для предпросмотра
+    // Яндекс.Карты для предпросмотра.
     wp_enqueue_script(
         'yamaps',
         'https://api-maps.yandex.ru/2.1/?lang=ru_RU',
@@ -334,4 +414,3 @@ function ev_enqueue_settings_assets($hook) {
         true
     );
 }
-

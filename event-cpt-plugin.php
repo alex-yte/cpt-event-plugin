@@ -14,6 +14,7 @@ require_once __DIR__ . '/inc/metaboxes.php'; // метабоксы
 require_once __DIR__ . '/inc/card-template.php'; // шаблон карточки события
 require_once __DIR__ . '/inc/shortcode.php'; // шорткод и AJAX
 require_once __DIR__ . '/inc/settings-page.php'; // страница настроек
+require_once __DIR__ . '/inc/cron.php'; // cron задачи
 
 // стиль и скрипты
 add_action('wp_enqueue_scripts', function() {
